@@ -1,4 +1,4 @@
-# usage: python bin/factorizer.py --n_comp 5 --learn_rate 0.001 --penality 0.1 --input_file data/E.coli/coexpresion.ecoli.511145
+# usage: python bin/factorizer.py --n_comp 5 --learn_rate 0.001 --penality 0.1 --input_file data/E.coli/coexpresion.ecoli.511145 --tag coexpr
 
 import pandas as pd
 import numpy as np
@@ -12,36 +12,23 @@ import tensorflow as tf
 from scipy import spatial
 import csv
 
-try:
-	os.remove("out/performances.csv")
-except OSError:
-    pass
-
-try:
-	os.remove("out/estimates.csv")
-except OSError:
-    pass
-
-try:
-	os.remove("out/user-factors.csv")
-except OSError:
-    pass
-
-try:
-	os.remove("out/item-factors.csv")
-except OSError:
-    pass
-
 #======
 # flags
 #======
 
+tf.app.flags.DEFINE_string("tag", "1", "")
 tf.app.flags.DEFINE_string("input_file", "1", "")
 tf.app.flags.DEFINE_integer("n_comp", "1", "")
 tf.app.flags.DEFINE_float("learn_rate", "1", "")
 tf.app.flags.DEFINE_float("penality", "1", "")
 
 FLAGS = tf.app.flags.FLAGS
+
+tag = FLAGS.tag
+try:
+	os.remove("out/"+tag+"_performances.csv")
+except OSError:
+    pass
 
 #============
 # data import
@@ -52,9 +39,13 @@ filename = FLAGS.input_file
 df = pd.read_csv(filename, sep='\t', engine='python')
 df.columns = ["user", "item", "rate"]
 
-if filename == 'data/E.coli/coexpresion.ecoli.511145':
+if filename == 'data/E.coli/coexpression.ecoli.511145':
 	df["user"] = df["user"].map(lambda x: x.lstrip("511145."))
 	df["item"] = df["item"].map(lambda x: x.lstrip("511145."))
+	#x = df["rate"]
+	#C = 1
+	#D = 5
+	#df["rate"] = C + (x - min(x)) * (D - C) / (max(x) - min(x))
 
 if filename == 'data/E.coli/ppi.ecoli.511145':
 	df["user"] = df["user"].map(lambda x: x.lstrip("511145."))
@@ -184,7 +175,7 @@ with tf.Session() as sess:
 		if (i % 200) == 0:
 			fields = [ i, train_err, train_cosSim, test_err, test_cosSim ]
 			print fields
-			with open(r"out/performances.csv", "a") as f:
+			with open(r"out/"+tag+"_performances.csv", "a") as f:
 				writer = csv.writer(f)
 				writer.writerow(fields)
 		
@@ -224,33 +215,23 @@ for index in range(len(data)):
 		item_factors.append( q_i[index] )
 
 tmp = pd.DataFrame(estimates, columns=[ 'user', 'item', 'rate', 'rate_estimate', 'user_bias', 'item_bias'])
-tmp.to_csv('out/estimates.csv', index=False, header=True)
+tmp.to_csv('out/'+tag+'_estimates.csv', index=False, header=True)
 
 tmp = pd.DataFrame(user_factors)
-tmp.to_csv('out/user-factors.csv', index=False, header=False)
+tmp.to_csv('out/'+tag+'_user-factors.csv', index=False, header=False)
 
 tmp = pd.DataFrame(item_factors)
-tmp.to_csv('out/item-factors.csv', index=False, header=False)
+tmp.to_csv('out/'+tag+'_item-factors.csv', index=False, header=False)
 
-from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.metrics.pairwise import *
+user_factors = pd.read_csv('out/'+tag+'_user-factors.csv',header=None)
+user_factors = np.array(user_factors)
+sim = cosine_similarity(user_factors)
+simMat = pd.DataFrame(sim, index=seen_u, columns=seen_u)
+simMat.to_csv("out/"+tag+"_user-similarity.csv")
 
-
-simMat = []
-for i in range(len(seen_u)):
-	for j in range(len(seen_u)):
-		sim = cosine_similarity(user_factors[i], user_factors[j])
-		print seen_u[i]
-		print user_factors[i]
-		print seen_u[j]
-		print user_factors[j]
-		print [ seen_u[i], seen_u[j], sim ]
-
-'''
-simMat = []
-for i in range(len(seen_i)):
-	for j in range(len(seen_i)):
-		sim = 1 - spatial.distance.cosine(item_factors[i], item_factors[j])
-		simMat.append(sim)
+item_factors = pd.read_csv('out/'+tag+'_item-factors.csv',header=None)
+item_factors = np.array(item_factors)
+sim = cosine_similarity(item_factors)
 simMat = pd.DataFrame(sim, index=seen_i, columns=seen_i)
-simMat.to_csv("out/item-similarity.csv")
-'''
+simMat.to_csv("out/"+tag+"_item-similarity.csv")
