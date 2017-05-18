@@ -1,6 +1,6 @@
 library(igraph)
 
-links <- read.csv("out/knitout.csv", header=T, as.is=T)
+links <- read.csv("out/coexpr_knitout.csv", header=T, as.is=T)
 #links <- links[links$gene%in%c("BRCA1","RAD51"),]
 #links <- links[,-5]
 #links$weight <- 1

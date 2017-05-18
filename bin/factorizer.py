@@ -39,7 +39,7 @@ filename = FLAGS.input_file
 df = pd.read_csv(filename, sep='\t', engine='python')
 df.columns = ["user", "item", "rate"]
 
-if filename == 'data/E.coli/coexpression.ecoli.511145':
+if (filename == 'data/E.coli/coexpression.ecoli.511145') or (filename == 'test.txt'):
 	df["user"] = df["user"].map(lambda x: x.lstrip("511145."))
 	df["item"] = df["item"].map(lambda x: x.lstrip("511145."))
 	#x = df["rate"]
@@ -198,7 +198,9 @@ print "average rating: ", b_g
 
 estimates = []
 user_factors = []
+user_bias = []
 item_factors = []
+item_bias = []
 seen_u = []
 seen_i = []
 for index in range(len(data)):
@@ -210,9 +212,11 @@ for index in range(len(data)):
 	if id_u not in seen_u:
 		seen_u.append(id_u)
 		user_factors.append( p_u[index] )
+		user_bias.append([ id_u, b_u[index] ])
 	if id_i not in seen_i:
 		seen_i.append(id_i)
 		item_factors.append( q_i[index] )
+		item_bias.append([ id_i, b_i[index] ])
 
 tmp = pd.DataFrame(estimates, columns=[ 'user', 'item', 'rate', 'rate_estimate', 'user_bias', 'item_bias'])
 tmp.to_csv('out/'+tag+'_estimates.csv', index=False, header=True)
@@ -220,8 +224,14 @@ tmp.to_csv('out/'+tag+'_estimates.csv', index=False, header=True)
 tmp = pd.DataFrame(user_factors)
 tmp.to_csv('out/'+tag+'_user-factors.csv', index=False, header=False)
 
+tmp = pd.DataFrame(user_bias)
+tmp.to_csv('out/'+tag+'_user-bias.csv', index=False, header=False)
+
 tmp = pd.DataFrame(item_factors)
 tmp.to_csv('out/'+tag+'_item-factors.csv', index=False, header=False)
+
+tmp = pd.DataFrame(item_bias)
+tmp.to_csv('out/'+tag+'_item-bias.csv', index=False, header=False)
 
 from sklearn.metrics.pairwise import *
 user_factors = pd.read_csv('out/'+tag+'_user-factors.csv',header=None)
