@@ -1,5 +1,5 @@
 # usage:
-# python bin/knitter.py --input_file1 out/item-similarity.csv --input_file2 out/user-similarity.csv --tag coexpr
+# python bin/knitter.py --input_file1 out/coexpression.ecoli.511145_dist.csv --input_file2 out/ppi.ecoli.511145_rajagopala_dist.csv --tag coexpr
 
 from __future__ import division
 import tensorflow as tf

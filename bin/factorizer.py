@@ -9,6 +9,7 @@ from sklearn.preprocessing import normalize
 from sklearn.utils.extmath import randomized_svd
 from scipy.sparse import csr_matrix
 import tensorflow as tf
+import scipy
 from scipy import spatial
 import csv
 
@@ -39,9 +40,24 @@ filename = FLAGS.input_file
 df = pd.read_csv(filename, sep='\t', engine='python')
 df.columns = ["user", "item", "rate"]
 
-if (filename == 'data/E.coli/coexpression.ecoli.511145') or (filename == 'test.txt'):
+if filename == 'data/E.coli/coexpression.ecoli.511145':
 	df["user"] = df["user"].map(lambda x: x.lstrip("511145."))
 	df["item"] = df["item"].map(lambda x: x.lstrip("511145."))
+	
+	# add inverted user-item pairs
+	cols = list(df)
+	cols[1], cols[0] = cols[0], cols[1]
+	df1 = df.ix[:,cols]
+	df1.columns = ["user", "item", "rate"]
+	df = df.append(df1, ignore_index=True)
+	
+	# add 1.0 to same user-item pairs
+	#df2 = pd.DataFrame()
+	#df2['user'] = list(set(df['user']))
+	#df2['item'] = list(set(df['user']))
+	#df2['rate'] = [1.0] * len(set(df['user']))
+	#df = df.append(df2, ignore_index=True)
+
 	#x = df["rate"]
 	#C = 1
 	#D = 5
@@ -120,23 +136,24 @@ with tf.variable_scope('Placeholder'):
 
 with tf.variable_scope('Estimates'):
 	w_user = tf.get_variable("embd_user", shape=[user_num, dim],
-                                 initializer=tf.truncated_normal_initializer(stddev=1))
+                                 initializer=tf.truncated_normal_initializer(stddev=0.1))
 	w_item = tf.get_variable("embd_item", shape=[item_num, dim],
-                                 initializer=tf.truncated_normal_initializer(stddev=1))
+                                 initializer=tf.truncated_normal_initializer(stddev=0.1))
+	embd_user = tf.nn.embedding_lookup(w_user, user_batch, name="embedding_user")
+	embd_item = tf.nn.embedding_lookup(w_item, item_batch, name="embedding_item")
 
-	#bias_global = tf.get_variable("bias_global", shape=[])
-	bias_global = tf.constant(mu, dtype=tf.float32, shape=[], name="bias_global")
 	w_bias_user = tf.get_variable("embd_bias_user", shape=[user_num])
 	w_bias_item = tf.get_variable("embd_bias_item", shape=[item_num])
 	bias_user = tf.nn.embedding_lookup(w_bias_user, user_batch, name="bias_user")
 	bias_item = tf.nn.embedding_lookup(w_bias_item, item_batch, name="bias_item")
-
-	embd_user = tf.nn.embedding_lookup(w_user, user_batch, name="embedding_user")
-	embd_item = tf.nn.embedding_lookup(w_item, item_batch, name="embedding_item")
+	#bias_global = tf.get_variable("bias_global", shape=[])
+	bias_global = tf.constant(mu, dtype=tf.float32, shape=[], name="bias_global")
 
 with tf.variable_scope('Regularization'):
-	penalty = tf.constant(reg, dtype=tf.float32, shape=[], name="l2")
+	penalty = tf.constant(reg, dtype=tf.float32, shape=[], name="lambda")
 	regularizer = tf.add(tf.nn.l2_loss(embd_user), tf.nn.l2_loss(embd_item), name="svd_regularizer")
+	regularizer = tf.add(regularizer, tf.nn.l2_loss(bias_user))
+	regularizer = tf.add(regularizer, tf.nn.l2_loss(bias_item), name="svd_regularizer")
 
 with tf.variable_scope('Inference'):
 	infer = tf.reduce_sum(tf.multiply(embd_user, embd_item), 1)
@@ -165,15 +182,17 @@ with tf.Session() as sess:
                                                                item_batch: train_cols,
                                                                rate_batch: train_data})
 		train_err = np.sqrt(np.mean(np.power(pred_batch - train_data, 2))) # RMSE
-		train_cosSim = 1 - spatial.distance.cosine(pred_batch, train_data)
+		train_corr = scipy.stats.pearsonr(pred_batch, train_data) # pearson
+		train_cosSim = 1 - spatial.distance.cosine(pred_batch, train_data) # cosSim
 		
 		pred_batch = sess.run(infer, feed_dict={user_batch: test_rows,
                                                 item_batch: test_cols})
 		test_err = np.sqrt(np.mean(np.power(pred_batch - test_data, 2)))
+		test_corr = scipy.stats.pearsonr(pred_batch, test_data)
 		test_cosSim = 1 - spatial.distance.cosine(pred_batch, test_data)
 		
 		if (i % 200) == 0:
-			fields = [ i, train_err, train_cosSim, test_err, test_cosSim ]
+			fields = [ i, train_err, train_cosSim, train_corr[0], test_err, test_cosSim, test_corr[0] ]
 			print fields
 			with open(r"out/"+tag+"_performances.csv", "a") as f:
 				writer = csv.writer(f)
@@ -194,7 +213,7 @@ b_i = estimates_batch[2]
 p_u = factors_batch[0]
 q_i = factors_batch[1]
 
-print "average rating: ", b_g
+print "global bias: ", b_g
 
 estimates = []
 user_factors = []
@@ -245,3 +264,19 @@ item_factors = np.array(item_factors)
 sim = cosine_similarity(item_factors)
 simMat = pd.DataFrame(sim, index=seen_i, columns=seen_i)
 simMat.to_csv("out/"+tag+"_item-similarity.csv")
+
+
+dm1 = pd.read_csv('out/'+tag+'_user-bias.csv',sep=',',index_col=0,header=None)
+dm2 = pd.read_csv('out/'+tag+'_item-bias.csv',sep=',',index_col=0,header=None)
+
+mat = []
+for i in dm1.index:
+	tensor = []
+	b_u = dm1.ix[i,1]
+	for j in dm2.index:
+		b_i = dm2.ix[j,1]
+		tensor.append(b_g + b_u + b_i)
+	mat.append(tensor)
+
+rMat = pd.DataFrame(mat, index=dm1.index, columns=dm2.index)
+rMat.to_csv("out/"+tag+"_recommendations.csv")

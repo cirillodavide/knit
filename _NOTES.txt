@@ -1,5 +1,5 @@
-python bin/factorizer.py --n_comp 5 --learn_rate 0.001 --penality 0.1 --input_file data/E.coli/coexpression.ecoli.511145 --tag coexpr
+python bin/factorizer.py --n_comp 5 --learn_rate 0.0001 --penality 0.01 --input_file data/E.coli/coexpression.ecoli.511145 --tag coexpr
 
 python bin/knitter.py --input_file1 out/coexpr_user-similarity.csv --input_file2 out/coexpr_item-similarity.csv --tag coexpr
 
-Rscript graphs/knitter.R
+Rscript graphs/knitter.R coexpr

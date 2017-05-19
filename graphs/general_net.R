@@ -6,7 +6,7 @@ outpdf <- ""
 links <- read.csv(file, header=T, sep='\t')
 
 # matrix
-net <- graph_from_incidence_matrix(links)
+
 # pair-wise list
 net <- graph_from_data_frame(d=links, directed=F) 
 
